@@ -1,3 +1,1 @@
-""
-ProjectPulse AI - RAG & Agent Package
-""
+"""ProjectPulse AI - RAG Package."""

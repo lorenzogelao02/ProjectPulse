@@ -1,3 +1,1 @@
-""
-ProjectPulse AI - Database Package
-""
+"""ProjectPulse AI - Database Package."""
