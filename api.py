@@ -1,20 +1,20 @@
-from pathlib import Path
+import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional
+import inngest
+import inngest.fast_api
 
-from src.ingestion.markdown_parser import MarkdownParser
-from src.ingestion.github_connector import GitHubRepositoryConnector
-from src.db.vector_store import VectorStoreManager
-from src.rag.hybrid_retriever import HybridRetriever
-from src.rag.agent import ProjectCoordinatorAgent
+from src.config import DATA_DIR
+from src.ingestion import MarkdownParser, GitHubRepositoryConnector
+from src.vector_store import VectorStoreManager, HybridRetriever
+from src.agent import ProjectCoordinatorAgent
+from src.inngest_app import inngest_client, ingest_github_repository_fn, daily_risk_scan_fn
 
 app = FastAPI(
     title="ProjectPulse AI API",
-    description="AI-Driven Project Coordination & RAG Workspace Backend",
+    description="AI-Driven Project Coordination & Production RAG API",
     version="2.0.0"
 )
 
@@ -26,26 +26,39 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Global instances
+# Serve Inngest background workflow endpoint
+inngest.fast_api.serve(
+    app,
+    inngest_client,
+    [ingest_github_repository_fn, daily_risk_scan_fn],
+    serve_path="/api/inngest"
+)
+
+# Global Instances
 vector_store = VectorStoreManager()
 retriever = HybridRetriever(vector_store)
 agent = ProjectCoordinatorAgent(retriever)
+
 
 class QueryRequest(BaseModel):
     query: str
     top_k: Optional[int] = 3
 
+
 class GitHubIngestRequest(BaseModel):
     repo_url: str
+
 
 @app.on_event("startup")
 def auto_index_sample_project():
     """Auto-indexes sample Markdown files on server startup."""
     print("[ProjectPulse AI] Initializing production engine...")
-    sample_file = Path("data/sample_project/01_Architecture.md")
-    if sample_file.exists():
-        chunks = MarkdownParser.parse_file(sample_file)
-        vector_store.add_chunks(chunks)
+    sample_dir = DATA_DIR / "sample_project"
+    if sample_dir.exists():
+        for file_path in sample_dir.glob("*.md"):
+            chunks = MarkdownParser.parse_file(file_path)
+            vector_store.add_chunks(chunks)
+
 
 @app.get("/health")
 def health_check():
@@ -54,6 +67,7 @@ def health_check():
         "system": "ProjectPulse AI Production Engine",
         "total_chunks_indexed": len(vector_store.chunks)
     }
+
 
 @app.get("/api/documents")
 def list_documents():
@@ -70,6 +84,7 @@ def list_documents():
 
     return {"documents": list(doc_registry.values()), "total_chunks": len(vector_store.chunks)}
 
+
 @app.post("/api/query")
 def process_rag_query(request: QueryRequest):
     """Runs hybrid vector + sparse search and synthesizes cited answer."""
@@ -78,13 +93,26 @@ def process_rag_query(request: QueryRequest):
 
     return agent.answer_query(request.query, top_k=request.top_k)
 
+
 @app.post("/api/ingest/github")
-def ingest_github_repository(request: GitHubIngestRequest):
-    """Fetches and indexes README and issues from any public GitHub repository URL via API."""
+async def ingest_github_repository(request: GitHubIngestRequest):
+    """Triggers an Inngest background event to fetch and index GitHub repo documents asynchronously."""
     if not request.repo_url.strip():
         raise HTTPException(status_code=400, detail="GitHub repository URL cannot be empty.")
 
     try:
+        await inngest_client.send(
+            inngest.Event(
+                name="projectpulse/github.ingest",
+                data={"repo_url": request.repo_url}
+            )
+        )
+        return {
+            "status": "queued",
+            "message": "GitHub repository ingestion triggered in background via Inngest workflow.",
+            "repo_url": request.repo_url
+        }
+    except Exception:
         connector = GitHubRepositoryConnector()
         chunks = connector.fetch_repo_documents(request.repo_url)
         vector_store.add_chunks(chunks)
@@ -94,8 +122,7 @@ def ingest_github_repository(request: GitHubIngestRequest):
             "chunks_added": len(chunks),
             "total_system_chunks": len(vector_store.chunks)
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to ingest GitHub repository: {str(e)}")
+
 
 @app.get("/api/risks")
 def scan_project_risks():
@@ -103,14 +130,7 @@ def scan_project_risks():
     risks = agent.scan_project_risks()
     return {"risks": risks, "total_risks_found": len(risks)}
 
-# Serve Web Frontend Dashboard if available
-web_dir = Path("web")
-if web_dir.exists():
-    app.mount("/web", StaticFiles(directory=str(web_dir)), name="web")
 
-@app.get("/")
-def serve_index():
-    index_file = Path("web/index.html")
-    if index_file.exists():
-        return FileResponse(str(index_file))
-    return {"message": "ProjectPulse AI API v2.0 is running. Visit /docs for API documentation."}
+if __name__ == "__main__":
+    uvicorn.run("api:app", host="127.0.0.1", port=8000, reload=True, reload_dirs=["src"])
+

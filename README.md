@@ -1,126 +1,129 @@
-# ⚡ ProjectPulse AI: AI-Native Project Coordination & RAG Workspace
+# ⚡ ProjectPulse AI
 
-> **The central workspace where large-scale projects live, with AI as the driving force throughout.**
+> 🚧 **Work in Progress (WIP)** — A fun side-project for experimenting with production RAG architectures, event-driven background workflows, and AI project co-pilots.
 
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688.svg)](https://fastapi.tiangolo.com/)
-[![ChromaDB](https://img.shields.io/badge/VectorDB-ChromaDB-purple.svg)](https://www.trychroma.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-
----
-
-## 📌 Project Overview
-
-In large-scale technical projects, critical information is scattered across architectural specs, meeting notes, PR descriptions, and task boards. **ProjectPulse AI** is an AI-driven project coordination engine designed to unify project documentation, structure complex data, and act as an intelligent co-pilot for technical teams.
-
-### 🌟 Key Capabilities
-- 📄 **Multi-Source Ingestion Pipeline:** Ingests local Markdown files, technical PDFs, and public **GitHub Repositories** via the GitHub REST API.
-- 🎯 **Verifiable Lineage & Line Citations:** Preserves exact document section headers and line ranges (e.g. `[01_Architecture.md L12-L24]`) so every AI response is 100% traceable.
-- 🔍 **Advanced Hybrid Search:** Combines **Dense Vector Embeddings** (`sentence-transformers/all-MiniLM-L6-v2`) with **Sparse Keyword Matching** (BM25) for high retrieval precision over technical code/API names.
-- ⚠️ **Autonomous Risk & Contradiction Detector:** An agentic worker that scans incoming documentation against existing specs to flag conflicting architecture decisions or dependency bottlenecks.
-- 💻 **Interactive Split-View Dashboard:** Sleek UI displaying active project documents, interactive citation line highlighter, and instant prompt execution.
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Streamlit](https://img.shields.io/badge/UI-Streamlit-FF4B4B.svg)](https://streamlit.io/)
+[![FastAPI](https://img.shields.io/badge/API-FastAPI-009688.svg)](https://fastapi.tiangolo.com/)
+[![Inngest](https://img.shields.io/badge/Orchestration-Inngest-000000.svg)](https://www.inngest.com/)
+[![Groq](https://img.shields.io/badge/LLM-Groq_LLaMA_3.3-orange.svg)](https://groq.com/)
 
 ---
 
-## 🏗️ System Architecture
+## 💡 About The Project
 
-```mermaid
-flowchart TD
-    subgraph Data Sources
-        A1[Local Markdown / PDF Specs]
-        A2[GitHub API Repository Connector]
-    end
+**ProjectPulse AI** is a personal playground project built to explore how to create an intelligent co-pilot for technical projects. 
 
-    subgraph Data Processing Pipeline
-        B1[Line-Aware Document Parser]
-        B2[Contextual Metadata Chunker]
-    end
+Instead of searching through scattered Markdown docs, GitHub READMEs, issues, or PDFs, ProjectPulse indexes your codebase documentation, provides cited answers with line numbers, and automatically alerts you to potential risks or blockers.
 
-    subgraph Dual Storage Layer
-        C1[(SQLite Metadata & Task DB)]
-        C2[(Persistent ChromaDB Vector Store)]
-    end
+---
 
-    subgraph RAG & Agentic Engine
-        D1[Hybrid Retriever: Dense Vectors + BM25]
-        D2[Reranking & Context Builder]
-        D3[Project Co-Pilot & Risk Scanner Agent]
-    end
+## 🌟 Key Features
 
-    subgraph Interface
-        E1[FastAPI REST Endpoints]
-        E2[Interactive Web Dashboard]
-    end
+- **💬 Interactive Streamlit Dashboard:** Instant Q&A chat assistant with exact line-number citations and confidence scores.
+- **📄 Multi-Format Document Ingestion:** Drag-and-drop support for **PDFs** (`pypdf`), **Markdown files**, and **GitHub Repositories** (fetches READMEs and open issues via REST API).
+- **🔍 Hybrid Search Engine:** Combines **Dense Vector Embeddings** (`sentence-transformers/all-MiniLM-L6-v2`) with **Sparse Keyword Matching** (BM25) for high retrieval precision.
+- **⚙️ Event-Driven Orchestration with Inngest:** Background task processing for heavy repository ingestion, retries, and daily automated risk scanning.
+- **⚡ Ultra-Fast LLM Powered by Groq Cloud:** Default integration with Groq's `llama-3.3-70b-versatile` (with OpenAI `gpt-4o-mini` & local fallback support).
+- **⚠️ Automated Project Risk Radar:** Scans indexed documentation for dependency bottlenecks, unassigned blockers, and architecture conflicts.
 
-    A1 --> B1
-    A2 --> B1
-    B1 --> B2
-    B2 --> C1
-    B2 --> C2
-    C1 & C2 --> D1
-    D1 --> D2
-    D2 --> D3
-    D3 --> E1
-    E1 --> E2
+---
+
+## 🏗️ Architecture
+
+```text
+               +----------------------------------+
+               |     Streamlit Dashboard (app.py) |
+               +----------------------------------+
+                                |
+                                v
++------------------------------------------------------------------+
+|                   ProjectPulse Core (src/)                      |
+|                                                                  |
+|  +--------------------+   +-------------------+  +------------+  |
+|  |    Ingestion       |   |   Vector Store    |  | RAG Agent  |  |
+|  | PDF / MD / GitHub  | ->| VectorStore + BM25|->| Groq/OpenAI|  |
+|  +--------------------+   +-------------------+  +------------+  |
++------------------------------------------------------------------+
+                                ^
+                                |
+               +----------------------------------+
+               |   FastAPI & Inngest (api.py)     |
+               +----------------------------------+
 ```
 
 ---
 
 ## 🛠️ Tech Stack
 
-* **Core Backend:** Python 3.11, AsyncIO, FastAPI, Pydantic v2
-* **Vector & Relational Storage:** ChromaDB (Vector Store), SQLite / PostgreSQL (Relational Metadata)
-* **Embedding & Retrieval:** `sentence-transformers` (`all-MiniLM-L6-v2`), `rank-bm25` (Sparse Retrieval)
-* **API Integrations:** GitHub REST API (`PyGithub` / `requests`), PyPDF
-* **Frontend:** Vanilla JS / HTML5 / CSS3 (Glassmorphism design system)
+- **UI & Web:** Streamlit, FastAPI, Uvicorn
+- **LLM & Embeddings:** Groq Cloud (`llama-3.3-70b`), OpenAI (`gpt-4o-mini`), SentenceTransformers (`all-MiniLM-L6-v2`)
+- **Search & Vector Storage:** ChromaDB (Vector Store), BM25 (`rank-bm25`)
+- **Workflow Orchestration:** Inngest (Background tasks & cron functions)
+- **Document Parsers:** `pypdf`, GitHub REST API, Markdown Line Parser
+- **Package Management:** `pyproject.toml` / `uv`
 
 ---
 
-## 🚀 Quickstart Guide
+## 🚀 Quickstart
 
-### 1. Clone the Repository
+### 1. Clone the repo & setup `.env`
 ```bash
-git clone https://github.com/your-username/ProjectPulse-AI.git
-cd ProjectPulse-AI
+git clone https://github.com/your-username/RAG_Job.git
+cd RAG_Job
 ```
 
-### 2. Set Up Virtual Environment & Install Dependencies
-```bash
-python -m venv .venv
-# On Windows:
-.venv\Scripts\activate
-# On macOS/Linux:
-source .venv/bin/activate
-
-pip install -r requirements.txt
+Create a `.env` file at root:
+```env
+GROQ_API_KEY=gsk_your_groq_key_here
+# Optional:
+# OPENAI_API_KEY=sk-your-openai-key
+# INNGEST_EVENT_KEY=your_inngest_event_key
+# INNGEST_SIGNING_KEY=your_inngest_signing_key
 ```
 
-### 3. Launch the Server & Interactive Dashboard
+### 2. Install Dependencies
+Using `uv` (recommended):
 ```bash
-python main.py --server
+uv sync
+```
+Or using standard `pip`:
+```bash
+pip install -e .
 ```
 
-Open your browser to **`http://127.0.0.1:8000`** to access the dashboard!
+### 3. Launch Streamlit UI
+```bash
+streamlit run app.py
+```
+Open **`http://localhost:8501`** in your browser!
+
+### 4. (Optional) Run FastAPI & Inngest Background Worker
+```bash
+python api.py
+```
+FastAPI server runs on **`http://localhost:8000`** (Swagger docs at `/docs`).
 
 ---
 
 ## 📂 Project Structure
 
-```
-ProjectPulse-AI/
-├── data/sample_project/            # Benchmark technical project documentation
+```text
+RAG_Job/
+├── .env                  # API keys (Groq, Inngest, OpenAI)
+├── pyproject.toml        # uv / package configuration
+├── app.py                # Streamlit UI dashboard
+├── api.py                # FastAPI REST server & Inngest endpoint
 ├── src/
-│   ├── config.py                    # Environment & configuration settings
-│   ├── db/                          # SQLite metadata & ChromaDB vector store
-│   ├── ingestion/                   # Markdown, PDF & GitHub API parsers
-│   ├── rag/                         # Hybrid retriever & AI Risk Detector agent
-│   └── api/                         # FastAPI server endpoints
-├── web/                             # Split-view web dashboard UI
-├── requirements.txt                 # Dependencies
-└── main.py                          # Application entrypoint & CLI runner
+│   ├── config.py         # Directory paths & settings
+│   ├── ingestion.py      # PDF, Markdown & GitHub parsers
+│   ├── vector_store.py   # VectorStoreManager & Hybrid (Dense + BM25) Retriever
+│   ├── agent.py          # ProjectCoordinatorAgent (Groq/OpenAI Q&A + Risk Scanner)
+│   └── inngest_app.py    # Inngest client & background workflow functions
+└── data/                 # Sample project benchmark docs
 ```
 
 ---
 
-## 📜 License
-Distributed under the MIT License. Built for DTU Software Engineering portfolio showcase.
+## 📌 Disclaimer
+This is an ongoing personal experiment built for fun and learning. Features are actively being added and tweaked!

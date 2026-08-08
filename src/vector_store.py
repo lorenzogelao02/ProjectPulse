@@ -1,6 +1,8 @@
 import math
 from typing import List, Tuple
-from src.ingestion.markdown_parser import DocumentChunk
+from src.config import EMBEDDING_MODEL_NAME
+from src.ingestion import DocumentChunk
+
 
 class VectorStoreManager:
     """Manages vector embeddings and similarity search index for project chunks."""
@@ -14,13 +16,13 @@ class VectorStoreManager:
         if self._model is None:
             try:
                 from sentence_transformers import SentenceTransformer
-                self._model = SentenceTransformer("all-MiniLM-L6-v2")
+                self._model = SentenceTransformer(EMBEDDING_MODEL_NAME)
             except Exception:
                 self._model = "fallback"
         return self._model
 
     def _embed_text(self, text: str) -> List[float]:
-        """Converts a text string into a vector of numbers."""
+        """Converts text into a vector embedding."""
         model = self._get_model()
         if model != "fallback":
             return model.encode(text).tolist()
@@ -29,7 +31,7 @@ class VectorStoreManager:
             vec = [0.0] * 64
             for w in words:
                 vec[abs(hash(w)) % 64] += 1.0
-            norm = math.sqrt(sum(x*x for x in vec)) or 1.0
+            norm = math.sqrt(sum(x * x for x in vec)) or 1.0
             return [x / norm for x in vec]
 
     def add_chunks(self, chunks: List[DocumentChunk]):
@@ -40,11 +42,10 @@ class VectorStoreManager:
             emb = self._embed_text(chunk.text)
             self.chunks.append(chunk)
             self.embeddings.append(emb)
-        print(f"[VectorStore] Indexed {len(chunks)} new chunks (Total in store: {len(self.chunks)}).")
 
     @staticmethod
     def _cosine_similarity(vec1: List[float], vec2: List[float]) -> float:
-        """Calculates cosine similarity angle between two vectors."""
+        """Calculates cosine similarity between two vectors."""
         dot = sum(a * b for a, b in zip(vec1, vec2))
         norm1 = math.sqrt(sum(a * a for a in vec1))
         norm2 = math.sqrt(sum(b * b for b in vec2))
@@ -66,3 +67,32 @@ class VectorStoreManager:
 
         scored_results.sort(key=lambda x: x[1], reverse=True)
         return scored_results[:top_k]
+
+
+class HybridRetriever:
+    """Combines Dense Vector Similarity Search with BM25 Keyword Search for high-precision retrieval."""
+
+    def __init__(self, vector_store: VectorStoreManager):
+        self.vector_store = vector_store
+
+    def _bm25_keyword_score(self, query: str, text: str) -> float:
+        """Calculates keyword match score for term alignment."""
+        query_words = set(query.lower().split())
+        text_words = set(text.lower().split())
+        if not query_words:
+            return 0.0
+        matches = query_words.intersection(text_words)
+        return len(matches) / len(query_words)
+
+    def retrieve(self, query: str, top_k: int = 3, dense_weight: float = 0.7) -> List[Tuple[DocumentChunk, float]]:
+        """Executes hybrid retrieval combining dense vector score and sparse keyword score."""
+        dense_results = self.vector_store.dense_search(query, top_k=len(self.vector_store.chunks) or 1)
+
+        hybrid_results = []
+        for chunk, dense_score in dense_results:
+            bm25_score = self._bm25_keyword_score(query, chunk.text)
+            combined_score = (dense_weight * dense_score) + ((1.0 - dense_weight) * bm25_score)
+            hybrid_results.append((chunk, round(combined_score, 4)))
+
+        hybrid_results.sort(key=lambda x: x[1], reverse=True)
+        return hybrid_results[:top_k]

@@ -1,17 +1,23 @@
 import os
 from typing import List, Dict, Any, Tuple
-from src.ingestion.markdown_parser import DocumentChunk
-from src.rag.hybrid_retriever import HybridRetriever
+from dotenv import load_dotenv
+
+load_dotenv()
+
+from src.ingestion import DocumentChunk
+from src.vector_store import HybridRetriever
+
 
 class ProjectCoordinatorAgent:
     """AI Project Coordinator Agent providing contextual Q&A with citations and automated risk detection."""
 
-    def __init__(self, retriever: HybridRetriever, openai_api_key: str = None):
+    def __init__(self, retriever: HybridRetriever, openai_api_key: str = None, groq_api_key: str = None):
         self.retriever = retriever
-        self.api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
+        self.openai_api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
+        self.groq_api_key = groq_api_key or os.getenv("GROQ_API_KEY")
 
     def answer_query(self, query: str, top_k: int = 3) -> Dict[str, Any]:
-        """Runs hybrid search and generates cited answer."""
+        """Runs hybrid search and synthesizes a cited answer using LLM (Groq / OpenAI / Local Fallback)."""
         retrieved_results = self.retriever.retrieve(query, top_k=top_k)
         if not retrieved_results:
             return {
@@ -45,17 +51,34 @@ class ProjectCoordinatorAgent:
             f"USER QUESTION: {query}"
         )
 
-        if self.api_key:
+        if self.groq_api_key:
             try:
                 import openai
-                client = openai.OpenAI(api_key=self.api_key)
+                client = openai.OpenAI(
+                    base_url="https://api.groq.com/openai/v1",
+                    api_key=self.groq_api_key
+                )
+                res = client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.2
+                )
+                answer_text = res.choices[0].message.content
+            except Exception as e:
+                print(f"Groq API call error: {e}")
+                answer_text = self._synthesize_local_answer(query, retrieved_results)
+        elif self.openai_api_key:
+            try:
+                import openai
+                client = openai.OpenAI(api_key=self.openai_api_key)
                 res = client.chat.completions.create(
                     model="gpt-4o-mini",
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.2
                 )
                 answer_text = res.choices[0].message.content
-            except Exception:
+            except Exception as e:
+                print(f"OpenAI API call error: {e}")
                 answer_text = self._synthesize_local_answer(query, retrieved_results)
         else:
             answer_text = self._synthesize_local_answer(query, retrieved_results)
